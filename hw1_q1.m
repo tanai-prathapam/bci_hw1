@@ -1,29 +1,27 @@
-%% 0. Setup
+%% 0. Setup (repo-relative paths)
 clear; clc; close all;
-biosigDir = "C:\Users\bravo\OneDrive - The University of Texas at Austin\Desktop\Tanai's Data\UT Undergrad ALL\UT Classes ALL\BCI\HW_1_export\toolboxes\toolboxes\biosig";
-assert(isfolder(biosigDir), 'BioSig folder not found');
+repoDir  = fileparts(mfilename('fullpath'));
+miDir    = fullfile(repoDir,'MI_data_scripts','MI_data_scripts');
+biosigDir= fullfile(repoDir,'biosig');
+dataDir  = fullfile(miDir,'Subject_006_Session_006_TESS_Online_Visual');
+assert(isfolder(biosigDir),'biosig not found: %s',biosigDir);
+assert(isfolder(dataDir),  'Data folder not found: %s',dataDir);
 addpath(genpath(biosigDir));
-
-% EDIT if your data folder is somewhere else
-dataDir = fullfile(pwd, 'Subject_006_Session_006_TESS_Online_Visual');
-assert(isfolder(dataDir), 'Data folder not found: %s', dataDir);
-
-files = dir(fullfile(dataDir, '*.gdf'));
-[~, ord] = sort({files.name});  files = files(ord);     % r001..r004 in order
+addpath(miDir);                      % sload.m, topoplot_.m, selectedChannels.mat
+files = dir(fullfile(dataDir,'*.gdf'));
+[~,ord] = sort({files.name}); files = files(ord);
 nRuns = numel(files);
-fprintf('\n=== 0. Setup ===\n');
-fprintf('Found %d GDF files in %s\n', nRuns, dataDir);
-for r = 1:nRuns, fprintf('  run %d: %s\n', r, files(r).name); end
-assert(nRuns == 4, 'Expected 4 runs, found %d', nRuns);
+assert(nRuns==4,'Expected 4 runs, found %d',nRuns);
+which sload topoplot_                % confirm the intended copies are used
 
-%% 1. Parameters (justify the choices in your report)
-order = 4;  band = [8 12];                 % mu band, Hz
-keepCh = 1:32;                             % last 4 columns ignored
-% Event codes: VERIFY against biosig\eventcodes.txt before trusting
-codeLH = hex2dec('0301');                  % assumed left-hand cue
-codeRH = hex2dec('0302');                  % assumed right-hand cue
-taskDur_s = NaN;                           % task duration after cue, s (set after inspecting events)
-lastWin_s = 0.5;                           % last 0.5 s of task for topoplots
+%% 1. Parameters
+order = 4; band = [8 12]; keepCh = 1:32;
+code.cue   = struct('RH',769,  'LH',770);
+code.start = struct('RH',7691, 'LH',7701);
+code.miss  = struct('RH',7692, 'LH',7702);
+code.hit   = struct('RH',7693, 'LH',7703);
+lastWin_s = 0.5;
+
 
 %% 2. Channel labels, Laplacian neighbors, spatial filter matrices
 chanLabels = {'FP1','FPZ','FP2','F7','F3','FZ','F4','F8','FC5','FC1','FC2','FC6', ...
@@ -142,59 +140,37 @@ for r = 1:nRuns
     end
 end
 
-%% 5. Count trials per class and run
-fprintf('\n=== 5. Trial counts ===\n');
-nLH = zeros(nRuns,1);  nRH = zeros(nRuns,1);
+%% 5. Count trials (cue-based) per class and run
+cls = {'RH','LH'};
+nTr = zeros(nRuns,2);
 for r = 1:nRuns
     typ = HDR{r}.EVENT.TYP;
-    nLH(r) = sum(typ == codeLH);  nRH(r) = sum(typ == codeRH);
-    fprintf('Run %d: LH %d, RH %d\n', r, nLH(r), nRH(r));
+    for c = 1:2, nTr(r,c) = sum(typ==code.cue.(cls{c})); end
 end
-fprintf('Total: LH %d, RH %d, all %d\n', sum(nLH), sum(nRH), sum(nLH)+sum(nRH));
-if sum(nLH)+sum(nRH) == 0
-    warning('No trials found with the assumed codes. Fix codeLH/codeRH from eventcodes.txt.');
-end
+disp(array2table(nTr,'VariableNames',cls,'RowNames',compose('run%d',1:nRuns)));
+fprintf('Total RH %d, LH %d, all %d\n',sum(nTr(:,1)),sum(nTr(:,2)),sum(nTr(:)));
 
-%% 6. Extract trials and compute mu power
-if isnan(taskDur_s) || sum(nLH)+sum(nRH) == 0
-    fprintf('\nSet taskDur_s and valid class codes above, then rerun sections 6 onward.\n');
-else
-    nS = round(taskDur_s*fs);
-    cls = {'LH','RH'};  codes = [codeLH codeRH];
-    T = struct();
-    for c = 1:2
-        T.(cls{c}).mu = [];  T.(cls{c}).car = [];  T.(cls{c}).lap = [];  T.(cls{c}).run = [];
-        for r = 1:nRuns
-            typ = HDR{r}.EVENT.TYP;  pos = HDR{r}.EVENT.POS;
-            st = pos(typ == codes(c));
-            for t = 1:numel(st)
-                idx = st(t) : st(t)+nS-1;
-                if idx(end) > size(MU{r},1), continue; end    % skip truncated trial
-                T.(cls{c}).mu  = cat(3, T.(cls{c}).mu,  MU{r}(idx,:));
-                T.(cls{c}).car = cat(3, T.(cls{c}).car, CAR{r}(idx,:));
-                T.(cls{c}).lap = cat(3, T.(cls{c}).lap, LAP{r}(idx,:));
-                T.(cls{c}).run(end+1) = r;
-            end
-        end
-        fprintf('%s: data size %s [samples x channels x trials]\n', cls{c}, mat2str(size(T.(cls{c}).mu)));
-    end
 
-    % Mu power per trial and channel: mean of squared samples over the trial
-    for c = 1:2
-        for f = {'mu','car','lap'}
-            X = T.(cls{c}).(f{1});
-            T.(cls{c}).(['P_' f{1}]) = squeeze(mean(X.^2, 1));   % [channels x trials]
-        end
-        fprintf('%s mu power size (no filter): %s\n', cls{c}, mat2str(size(T.(cls{c}).P_mu)));
-    end
 
-    % Last 0.5 s of each trial for the grand-average topoplot
-    nL = round(lastWin_s*fs);
-    for c = 1:2
-        for f = {'mu','car','lap'}
-            X = T.(cls{c}).(f{1})(end-nL+1:end, :, :);
-            T.(cls{c}).(['GA_' f{1}]) = mean(squeeze(mean(X.^2, 1)), 2);   % [channels x 1]
+%% 6. Extract task trials (feedback start -> hit/miss), variable length
+T = struct();
+for c = 1:2
+    k = cls{c};
+    T.(k).mu={}; T.(k).car={}; T.(k).lap={}; T.(k).run=[]; T.(k).outcome=[]; T.(k).len_s=[];
+    for r = 1:nRuns
+        typ=HDR{r}.EVENT.TYP(:); pos=HDR{r}.EVENT.POS(:);
+        iS = find(typ==code.start.(k));
+        for t = 1:numel(iS)
+            j = iS(t)+1;                         % next event = end marker
+            if j>numel(typ) || ~ismember(typ(j),[code.miss.(k) code.hit.(k)]), continue; end
+            idx = pos(iS(t)):pos(j);
+            T.(k).mu{end+1}=MU{r}(idx,:);  T.(k).car{end+1}=CAR{r}(idx,:);
+            T.(k).lap{end+1}=LAP{r}(idx,:);
+            T.(k).run(end+1)=r;  T.(k).outcome(end+1)=(typ(j)==code.hit.(k));
+            T.(k).len_s(end+1)=numel(idx)/fs;
         end
     end
-    fprintf('Grand-average vectors ready for topoplot (32 x 1 each).\n');
+    fprintf('%s: %d trials, hit %d, miss %d, length %.2f-%.2f s\n',k,numel(T.(k).run), ...
+        sum(T.(k).outcome),sum(~T.(k).outcome),min(T.(k).len_s),max(T.(k).len_s));
 end
+% Q: trials per class extracted must equal cue counts in section 5, else investigate
