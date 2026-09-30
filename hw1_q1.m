@@ -174,3 +174,47 @@ for c = 1:2
         sum(T.(k).outcome),sum(~T.(k).outcome),min(T.(k).len_s),max(T.(k).len_s));
 end
 % Q: trials per class extracted must equal cue counts in section 5, else investigate
+
+
+%% 7. Per-trial mu power (mean of squared samples), raw vs CAR
+cls = {'RH','LH'};  filt = {'mu','car'};  filtName = {'No spatial filter','CAR'};
+nL = round(lastWin_s*fs);
+P = struct();  GA = struct();
+for c = 1:2
+    k = cls{c};  nT = numel(T.(k).run);
+    for f = 1:2
+        X = T.(k).(filt{f});
+        Pfull = zeros(32,nT);  Plast = nan(32,nT);
+        for t = 1:nT
+            Pfull(:,t) = mean(X{t}.^2, 1)';                  % whole task, 32 x 1
+            if size(X{t},1) >= nL
+                Plast(:,t) = mean(X{t}(end-nL+1:end,:).^2, 1)';   % last 0.5 s
+            end
+        end
+        P.(k).(filt{f})  = Pfull;                            % [channels x trials]
+        GA.(k).(filt{f}) = mean(Plast, 2, 'omitnan');        % [channels x 1]
+        assert(~any(isnan(Plast(:))), 'A %s trial was shorter than %.1f s', k, lastWin_s);
+        fprintf('%s %-3s: per-trial power %s | GA range %.3g to %.3g\n', k, filt{f}, ...
+            mat2str(size(Pfull)), min(GA.(k).(filt{f})), max(GA.(k).(filt{f})));
+    end
+end
+% Units: signal units squared. Check h.PhysDim (likely uV, so uV^2)
+disp(HDR{1}.PhysDim(1:3,:));
+
+%% 8. Topoplots of last-0.5 s grand-average mu power
+S = load(fullfile(miDir,'selectedChannels.mat'));
+disp(fieldnames(S));                          % CHECK the variable name and size
+fn = fieldnames(S);
+selCh = S.(fn{1});      % edit fn{1} if the channel variable is not the first fieldfigure('Name','Mu power, last 0.5 s','Position',[100 100 900 700]);
+for c = 1:2
+    for f = 1:2
+        subplot(2,2,(c-1)*2+f);
+        topoplot_(GA.(cls{c}).(filt{f}), selCh);
+        % shared color limits within each filter type, across RH and LH
+        lim = [min(GA.RH.(filt{f})(:)), max([GA.RH.(filt{f})(:); GA.LH.(filt{f})(:)])];
+        lim(1) = min(lim(1), min(GA.LH.(filt{f})(:)));
+        caxis(lim);  colorbar;
+        title(sprintf('%s | %s', cls{c}, filtName{f}));
+    end
+end
+sgtitle('Grand-average mu power (8-12 Hz), last 0.5 s of task, n=40 trials per class');
