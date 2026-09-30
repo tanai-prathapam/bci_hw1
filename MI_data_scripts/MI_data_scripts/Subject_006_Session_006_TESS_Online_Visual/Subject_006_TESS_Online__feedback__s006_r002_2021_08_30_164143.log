@@ -1,0 +1,16 @@
+/home/millanslab/TESS_MI/f1_data/TESS_Online/Subject_006_TESS_Online/Subject_006_Session_006_TESS_Online_Visual/Subject_006_TESS_Online__feedback__s006_r002_2021_08_30_164143.gdf 
+ExperimentConfigureTime 0.500000
+fixationCrossTime 2.000000
+cueTime 2.000000
+timeout 7.000000
+taskTime 5.000000
+resultTime 1.500000
+restTime 2.000000
+detectionThresholdLH 0.820000
+detectionThresholdRH 0.820000
+nTrials 10.000000
+LH_Threhsold_Hits 8.000000
+RH_Threhsold_Hits 5.000000
+LH_Threhsold_wrongHits 0.000000
+RH_Threhsold_wrongHits 0.000000
+RightHanded 1.000000
