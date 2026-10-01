@@ -207,7 +207,7 @@ S = load(fullfile(miDir,'selectedChannels.mat'));
 selCh = S.selectedChannels;
 assert(numel(selCh)==32, 'Expected 32 channel locations, got %d', numel(selCh));
 assert(isequal(upper({selCh.labels}), upper(chanLabels(:)')), 'Channel order mismatch');
-assert(isequal([selCh.urchan], 1:32), 'urchan is not 1:32, reorder selCh');
+fprintf('selCh urchan (original montage indices, informational): %s\n', mat2str([selCh.urchan]));
 
 cls = {'RH','LH'};  fl = {'mu','car'};  flName = {'No spatial filter','CAR'};
 figure('Name','Mu power, last 0.5 s','Position',[100 100 900 700]);
