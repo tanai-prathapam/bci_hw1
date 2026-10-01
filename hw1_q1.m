@@ -198,6 +198,8 @@ for c = 1:2
             mat2str(size(Pfull)), min(GA.(k).(filt{f})), max(GA.(k).(filt{f})));
     end
 end
+
+%added finished code comment
 % Units: signal units squared. Check h.PhysDim (likely uV, so uV^2)
 disp(HDR{1}.PhysDim);     % amplitude units for the power values (likely uV, so uV^2)
 
