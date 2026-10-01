@@ -199,22 +199,26 @@ for c = 1:2
     end
 end
 % Units: signal units squared. Check h.PhysDim (likely uV, so uV^2)
-disp(HDR{1}.PhysDim(1:3,:));
+disp(HDR{1}.PhysDim);     % amplitude units for the power values (likely uV, so uV^2)
 
 %% 8. Topoplots of last-0.5 s grand-average mu power
+assert(exist('GA','var')==1 && isfield(GA,'RH'), 'Run sections 0-7 first (GA missing)');
 S = load(fullfile(miDir,'selectedChannels.mat'));
-disp(fieldnames(S));                          % CHECK the variable name and size
-fn = fieldnames(S);
-selCh = S.(fn{1});      % edit fn{1} if the channel variable is not the first fieldfigure('Name','Mu power, last 0.5 s','Position',[100 100 900 700]);
-for c = 1:2
-    for f = 1:2
+selCh = S.selectedChannels;
+assert(numel(selCh)==32, 'Expected 32 channel locations, got %d', numel(selCh));
+assert(isequal(upper({selCh.labels}), upper(chanLabels(:)')), 'Channel order mismatch');
+assert(isequal([selCh.urchan], 1:32), 'urchan is not 1:32, reorder selCh');
+
+cls = {'RH','LH'};  fl = {'mu','car'};  flName = {'No spatial filter','CAR'};
+figure('Name','Mu power, last 0.5 s','Position',[100 100 900 700]);
+for f = 1:2
+    lo = min([GA.RH.(fl{f}); GA.LH.(fl{f})]);
+    hi = max([GA.RH.(fl{f}); GA.LH.(fl{f})]);
+    for c = 1:2
         subplot(2,2,(c-1)*2+f);
-        topoplot_(GA.(cls{c}).(filt{f}), selCh);
-        % shared color limits within each filter type, across RH and LH
-        lim = [min(GA.RH.(filt{f})(:)), max([GA.RH.(filt{f})(:); GA.LH.(filt{f})(:)])];
-        lim(1) = min(lim(1), min(GA.LH.(filt{f})(:)));
-        caxis(lim);  colorbar;
-        title(sprintf('%s | %s', cls{c}, filtName{f}));
+        topoplot_(GA.(cls{c}).(fl{f}), selCh, 'maplimits', [lo hi]);
+        colorbar;
+        title(sprintf('%s | %s', cls{c}, flName{f}));
     end
 end
-sgtitle('Grand-average mu power (8-12 Hz), last 0.5 s of task, n=40 trials per class');
+sgtitle('Grand-average mu power (8-12 Hz), last 0.5 s of task, n=40 per class');
